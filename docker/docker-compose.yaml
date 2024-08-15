@@ -1,0 +1,26 @@
+version: '3.5'     # Single quotes are visually lighter
+
+services:
+  ## Databases
+  performance_masking_data_mysql:
+    image: mysql:latest
+    environment:
+      MYSQL_USER: homecare
+      MYSQL_PASSWORD: homecaredb123
+      MYSQL_DATABASE: homecare-db
+      MYSQL_ROOT_PASSWORD: homecare123
+    ports:
+      - 3308:3306
+    volumes:             # Use an absolute path for clarity
+      - $PROJECT_PATH/docker/schema:/docker-entrypoint-initdb.d
+    networks:
+      - backend
+
+
+networks:
+  backend:
+    driver: bridge
+    ipam:
+      driver: default
+      config:
+        - subnet: "${NETWORK_DOCKER:-172.100.0.0/24}"
