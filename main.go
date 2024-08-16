@@ -58,8 +58,11 @@ func main() {
 	case "masking-sql":
 		insertWithEncryptionInSQL(db, numRecords)
 		listWithDecryptionInSQL(db)
+	case "masking-sql-golang":
+		insertWithEncryptionInSQLAndGo(db, numRecords)
+		listWithDecryptionInSQLAndGo(db)
 	default:
-		fmt.Println("Invalid command. Use 'masking-golang' or 'masking-sql'")
+		fmt.Println("Invalid command. Use 'masking-golang' or 'masking-sql' or 'masking-sql-golang'")
 	}
 }
 
@@ -181,6 +184,73 @@ func listWithDecryptionInGo(db *sql.DB) {
 
 	elapsed := time.Since(start)
 	color.Green("2. List with decryption in Go: %s", elapsed)
+}
+
+// Insert user data with encryption performed in the application layer and SQL query
+func insertWithEncryptionInSQLAndGo(db *sql.DB, numRecords int) {
+	start := time.Now()
+
+	for i := 0; i < numRecords; i += batchSize {
+		batchEnd := i + batchSize
+		if batchEnd > numRecords {
+			batchEnd = numRecords
+		}
+
+		// Construct the SQL query with placeholders for batch insertion and encryption in SQL
+		valueStrings := make([]string, 0, batchEnd-i)
+		valueArgs := make([]interface{}, 0, 3*(batchEnd-i)) // 3 placeholders per user (data, encryption key, encryption key)
+		for j := i; j < batchEnd; j++ {
+			user := generateFakeUser()
+			// Encrypt data in the application layer before sending to SQL for further encryption
+			encryptedName := encryptAES(user.Name, encryptionKey)
+			encryptedEmail := encryptAES(user.Email, encryptionKey)
+			valueStrings = append(valueStrings, "(AES_ENCRYPT(?, ?), AES_ENCRYPT(?, ?))")
+			valueArgs = append(valueArgs, encryptedName, encryptionKey, encryptedEmail, encryptionKey)
+		}
+		stmt := fmt.Sprintf("INSERT INTO users (name, email) VALUES %s", strings.Join(valueStrings, ","))
+
+		// Execute the batch insertion
+		_, err := db.Exec(stmt, valueArgs...)
+		if err != nil {
+			log.Fatal("Error inserting data with SQL and Go encryption:", err)
+		}
+	}
+
+	elapsed := time.Since(start)
+	color.Green("1. Insert with encryption in SQL and Go (%d records): %s\n", numRecords, elapsed)
+}
+
+// Retrieve and decrypt user data using MySQL's AES_DECRYPT function and additional decryption in Go
+func listWithDecryptionInSQLAndGo(db *sql.DB) {
+	start := time.Now()
+
+	rows, err := db.Query(`
+        SELECT id, 
+               AES_DECRYPT(name, ?), 
+               AES_DECRYPT(email, ?) 
+        FROM users
+    `, encryptionKey, encryptionKey)
+	if err != nil {
+		log.Fatal("Error retrieving data with SQL decryption:", err)
+	}
+	defer rows.Close()
+
+	for rows.Next() {
+		var id int
+		var decryptedName, decryptedEmail string
+		if err := rows.Scan(&id, &decryptedName, &decryptedEmail); err != nil {
+			log.Fatal("Error scanning row:", err)
+		}
+
+		// Further decrypt data in Go after initial decryption in SQL
+		_ = decryptAES(decryptedName, encryptionKey)
+		_ = decryptAES(decryptedEmail, encryptionKey)
+
+		//fmt.Println(id, name, email) // Print the fully decrypted data
+	}
+
+	elapsed := time.Since(start)
+	color.Green("2. List with decryption in SQL and Go: %s", elapsed)
 }
 
 // Helper function to generate a fake user

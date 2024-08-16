@@ -26,6 +26,10 @@ masking-golang:
 masking-sql:
 	go run main.go masking-sql $(NUM_RECORDS)
 
+#make masking-sql-golang NUM_RECORDS=1000
+masking-sql-golang:
+	go run main.go masking-sql-golang $(NUM_RECORDS)
+
 test:
 	sh script/script.sh
 
